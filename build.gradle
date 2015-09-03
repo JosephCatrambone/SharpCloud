@@ -1,0 +1,54 @@
+apply plugin: 'java'
+apply plugin: 'idea'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+version = '1.0'
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	testCompile group: 'junit', name: 'junit', version: '4.11'
+	// For JBlas
+	compile 'org.jblas:jblas:1.2.4'
+	runtime 'org.jblas:jblas:1.2.4'
+}
+
+/*
+task copyToLib( type: Copy ) {
+	into "$buildDir/libs/lib"
+	from configurations.runtime
+}
+*/
+
+jar {
+	//dependsOn copyToLib
+	from configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+	manifest {
+		attributes 'Implementation-Title': 'SharpCloud',
+			'Implementation-Version': version,
+			'Main-Class': 'com.josephcatrambone.sharpcloud.Main'
+	}
+}
+
+task(quickRun, dependsOn: 'classes', type: JavaExec) {
+	main = 'com.josephcatrambone.sharpcloud.Main'
+	classpath = sourceSets.main.runtimeClasspath
+	//args '1KSentences.txt'
+	//systemProperty 'simple.message', 'Running with arg 1KSentences.txt'
+}
+
+test {
+	testLogging {
+		showStandardStreams = true
+	}
+}
+
+idea {
+	module {
+		downloadJavadoc = true
+		downloadSources = true
+	}
+}
