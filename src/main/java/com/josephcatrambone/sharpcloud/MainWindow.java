@@ -21,7 +21,6 @@ import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import javafx.util.Duration;
 
-import java.awt.*;
 import java.io.*;
 import java.util.Random;
 import java.util.Scanner;
@@ -31,8 +30,8 @@ import java.util.logging.Logger;
 
 import org.jblas.DoubleMatrix;
 
-public class Main extends Application {
-	private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
+public class MainWindow extends Application {
+	private static final Logger LOGGER = Logger.getLogger(MainWindow.class.getName());
 	public final int WIDTH = 800;
 	public final int HEIGHT = 600;
 
@@ -52,18 +51,5 @@ public class Main extends Application {
 		Scene scene = new Scene(pane, WIDTH, HEIGHT);
 		stage.setScene(scene);
 		stage.show();
-
-		DoubleMatrix m = ImageTools.ImageFileToMatrix("test.png", -1, -1);
-		DoubleMatrix edges = ImageTools.edgeDetector(m);
-		ImageTools.FXImageToDisk(ImageTools.MatrixToFXImage(edges), "output.png");
-
-		stage.close();
 	}
-
-
-	public static void main(String[] args) {
-		launch(args);
-	}
-
-
 }

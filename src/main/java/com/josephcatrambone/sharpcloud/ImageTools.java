@@ -3,12 +3,14 @@ package com.josephcatrambone.sharpcloud;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.image.*;
+import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 import org.jblas.DoubleMatrix;
-import org.jblas.ranges.IndicesRange;
 import org.jblas.ranges.IntervalRange;
 
 import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
 import java.io.File;
 import java.io.IOException;
 
@@ -17,8 +19,56 @@ import java.io.IOException;
  */
 public class ImageTools {
 	public static DoubleMatrix ImageFileToMatrix(String filename, int width, int height) {
-		Image img = new Image("file:" + filename, width, height, true, true, false);
-		return FXImageToMatrix(img, width, height);
+		try {
+			BufferedImage img = ImageIO.read(new File(filename));
+			return AWTImageToMatrix(img, width, height);
+		} catch(IOException ioe) {
+			return null;
+		}
+	}
+
+	public static boolean MatrixToDiskAsImage(DoubleMatrix matrix, String filename) {
+		BufferedImage img = MatrixToAWTImage(matrix);
+		try {
+			ImageIO.write(img, "png", new File(filename));
+		} catch(IOException ioe) {
+			return false;
+		}
+		return true;
+	}
+
+	public static DoubleMatrix AWTImageToMatrix(BufferedImage img, int width, int height) {
+		if(width != -1 || height != -1) {
+			if(width == -1) { width = img.getWidth(); }
+			if(height == -1) { height = img.getHeight(); }
+			img = (BufferedImage)img.getScaledInstance(width, height, BufferedImage.SCALE_SMOOTH);
+		}
+
+		DoubleMatrix matrix = new DoubleMatrix(img.getHeight(), img.getWidth());
+
+		for(int y=0; y < img.getHeight(); y++) {
+			for(int x=0; x < img.getWidth(); x++) {
+				int rgb = img.getRGB(x, y);
+				double a = (rgb >> 32 & 0xff)/255.0;
+				double r = (rgb >> 16 & 0xff)/255.0;
+				double g = (rgb >> 8 & 0xff)/255.0;
+				double b = (rgb & 0xff)/255.0;
+				double luminance = Math.sqrt(r*r + g*g + b*b);
+				matrix.put(y, x, luminance);
+			}
+		}
+
+		return matrix;
+	}
+
+	public static BufferedImage MatrixToAWTImage(DoubleMatrix matrix) {
+		BufferedImage img = new BufferedImage(matrix.getColumns(), matrix.getRows(), BufferedImage.TYPE_BYTE_GRAY);
+		for(int y=0; y < matrix.getRows(); y++) {
+			for(int x=0; x < matrix.getColumns(); x++) {
+				img.setRGB(x, y, (int)(255*matrix.get(y, x)));
+			}
+		}
+		return img;
 	}
 
 	public static DoubleMatrix FXImageToMatrix(Image image, int width, int height) {
