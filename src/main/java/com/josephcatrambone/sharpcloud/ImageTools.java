@@ -7,6 +7,7 @@ import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 import org.jblas.DoubleMatrix;
 import org.jblas.ranges.IntervalRange;
+import org.jblas.ranges.*;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -100,7 +101,6 @@ public class ImageTools {
 		return output;
 	}
 
-
 	public static Image MatrixToFXImage(DoubleMatrix matrix) {
 		WritableImage img = new WritableImage(matrix.getColumns(), matrix.getRows());
 		PixelWriter pw = img.getPixelWriter();
@@ -130,8 +130,8 @@ public class ImageTools {
 
 	public static DoubleMatrix edgeDetector(DoubleMatrix image) {
 		// Calculate X and Y gradients
-		DoubleMatrix dx = image.getColumns(new IntervalRange(0, image.getColumns()-1)).subi(image.getColumns(new IntervalRange(1, image.getColumns())));
-		DoubleMatrix dy = image.getRows(new IntervalRange(0, image.getRows() - 1)).subi(image.getRows(new IntervalRange(1, image.getRows())));
+		DoubleMatrix dx = image.getColumns(new IntervalRange(0, image.getColumns()-1)).sub(image.getColumns(new IntervalRange(1, image.getColumns())));
+		DoubleMatrix dy = image.getRows(new IntervalRange(0, image.getRows() - 1)).sub(image.getRows(new IntervalRange(1, image.getRows())));
 
 		// The gradient calculation leaves the matrices slightly smaller.  Pad them back to normal size.
 		dx = DoubleMatrix.concatHorizontally(dx, DoubleMatrix.zeros(dx.getRows(), 1));
@@ -140,12 +140,12 @@ public class ImageTools {
 		// Calculate the gradient products.
 		DoubleMatrix xResponse = dx.mul(dx);
 		DoubleMatrix yResponse = dy.mul(dy);
-		DoubleMatrix xyResponse = dx.mul(dy);
+		//DoubleMatrix xyResponse = dx.mul(dy);
 
-		DoubleMatrix det = xResponse.mul(yResponse).sub(xyResponse.mul(xyResponse)); // subi?
-		DoubleMatrix trace = xResponse.add(yResponse);
+		//DoubleMatrix det = xResponse.mul(yResponse).sub(xyResponse.mul(xyResponse)); // subi?
+		//DoubleMatrix trace = xResponse.add(yResponse);
 
-		return det; //det.div(trace);
+		return xResponse.addi(yResponse); //det.div(trace);
 	}
 
 	/*** Given an image matrix, and a feature size, calculate feature points.
@@ -157,7 +157,65 @@ public class ImageTools {
 	 * @param image A single-channel greyscale image.
 	 * @return
 	 */
-	public static DoubleMatrix findFeaturePoints(DoubleMatrix image, int windowSize) {
-		return null;
+	public static DoubleMatrix findFeaturePoints(DoubleMatrix image, int windowSize, int minFeatures, int maxFeatures) {
+		final double FAILURE_THRESHOLD = 0.01;
+		final double THRESHOLD_STEP = 0.1;
+		double threshold = 1.0;
+
+		// First, find the edges.
+		DoubleMatrix edges = edgeDetector(image);
+
+		// Adaptive threshold.
+		int featureCount = 0;
+		DoubleMatrix candidates = null;
+		while(featureCount < minFeatures && threshold > FAILURE_THRESHOLD) {
+			threshold -= THRESHOLD_STEP;
+			double min = edges.min();
+			double max = edges.max()+0.000001;
+			candidates = (edges.sub(min)).divi(max-min);
+			featureCount = (int)candidates.gti(threshold).sum();
+		}
+
+		if(featureCount < minFeatures) {
+			System.err.println("Unable to acquire at least " + minFeatures);
+			System.err.println("Only " + featureCount + " features acquired.");
+			return null;
+		}
+
+		// We can expect
+		DoubleMatrix results = new DoubleMatrix(maxFeatures, 2+(windowSize*windowSize));
+		int currentPoint = 0;
+
+		for(int y=windowSize; y < image.getRows()-windowSize; y++) {
+			for(int x=windowSize; x < image.getColumns()-windowSize; x++) {
+				// Is the point at y x a candidate?
+				if(candidates.get(y, x) > 0) {
+					// Yes?  So fill in the first two columns with the x and y coordinates.
+					results.put(currentPoint, 0, x);
+					results.put(currentPoint, 1, y);
+
+					// And the remaining with the window details.
+					int cursor = 2;
+					for(int i=-windowSize/2; i < windowSize/2; i++) {
+						for(int j=-windowSize/2; j < windowSize/2; j++) {
+							results.put(currentPoint, cursor, image.get(y+i, x+j));
+							cursor += 1;
+						}
+					}
+
+					// And advance ourselves to the next slot.
+					currentPoint += 1;
+				}
+
+				// Make sure we haven't selected too many.
+				if(currentPoint > maxFeatures) {
+					System.err.println("Too many features.  Early out.");
+					break;
+				}
+			}
+		}
+
+		// Cut out the empty pieces.
+		return results.getRows(new IntervalRange(0, currentPoint));
 	}
 }
