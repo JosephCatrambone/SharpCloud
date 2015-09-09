@@ -7,11 +7,9 @@ import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
 import org.jblas.DoubleMatrix;
 import org.jblas.ranges.IntervalRange;
-import org.jblas.ranges.*;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.awt.image.ColorModel;
 import java.io.File;
 import java.io.IOException;
 
@@ -19,7 +17,7 @@ import java.io.IOException;
  * Created by josephcatrambone on 8/17/15.
  */
 public class ImageTools {
-	public static DoubleMatrix ImageFileToMatrix(String filename, int width, int height) {
+	public static DoubleMatrix imageFileToMatrix(String filename, int width, int height) {
 		try {
 			BufferedImage img = ImageIO.read(new File(filename));
 			return AWTImageToMatrix(img, width, height);
@@ -28,8 +26,8 @@ public class ImageTools {
 		}
 	}
 
-	public static boolean MatrixToDiskAsImage(DoubleMatrix matrix, String filename) {
-		BufferedImage img = MatrixToAWTImage(matrix);
+	public static boolean matrixToDiskAsImage(DoubleMatrix matrix, String filename) {
+		BufferedImage img = matrixToAWTImage(matrix);
 		try {
 			ImageIO.write(img, "png", new File(filename));
 		} catch(IOException ioe) {
@@ -62,7 +60,7 @@ public class ImageTools {
 		return matrix;
 	}
 
-	public static BufferedImage MatrixToAWTImage(DoubleMatrix matrix) {
+	public static BufferedImage matrixToAWTImage(DoubleMatrix matrix) {
 		BufferedImage img = new BufferedImage(matrix.getColumns(), matrix.getRows(), BufferedImage.TYPE_BYTE_GRAY);
 		for(int y=0; y < matrix.getRows(); y++) {
 			for(int x=0; x < matrix.getColumns(); x++) {
@@ -101,7 +99,7 @@ public class ImageTools {
 		return output;
 	}
 
-	public static Image MatrixToFXImage(DoubleMatrix matrix) {
+	public static Image matrixToFXImage(DoubleMatrix matrix) {
 		WritableImage img = new WritableImage(matrix.getColumns(), matrix.getRows());
 		PixelWriter pw = img.getPixelWriter();
 
@@ -186,8 +184,8 @@ public class ImageTools {
 		DoubleMatrix results = new DoubleMatrix(maxFeatures, 2+(windowSize*windowSize));
 		int currentPoint = 0;
 
-		for(int y=windowSize; y < image.getRows()-windowSize; y++) {
-			for(int x=windowSize; x < image.getColumns()-windowSize; x++) {
+		for(int y=windowSize; y < image.getRows()-windowSize && currentPoint < results.getRows(); y++) {
+			for(int x=windowSize; x < image.getColumns()-windowSize && currentPoint < results.getRows(); x++) {
 				// Is the point at y x a candidate?
 				if(candidates.get(y, x) > 0) {
 					// Yes?  So fill in the first two columns with the x and y coordinates.
@@ -205,12 +203,6 @@ public class ImageTools {
 
 					// And advance ourselves to the next slot.
 					currentPoint += 1;
-				}
-
-				// Make sure we haven't selected too many.
-				if(currentPoint > maxFeatures) {
-					System.err.println("Too many features.  Early out.");
-					break;
 				}
 			}
 		}
