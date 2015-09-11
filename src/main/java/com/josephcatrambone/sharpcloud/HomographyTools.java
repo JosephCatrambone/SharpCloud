@@ -1,6 +1,7 @@
 package com.josephcatrambone.sharpcloud;
 
 import org.jblas.DoubleMatrix;
+import org.jblas.Singular;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -65,5 +66,43 @@ public class HomographyTools {
 			}
 		}
 		return pairs;
+	}
+
+	/*** solveDLT
+	 * Given an array with four columns (x1, y1, x2, y2), solve for the homography, returning the error.
+	 * @param matches
+	 * @return
+	 */
+	public static double solveDLT(DoubleMatrix matches, DoubleMatrix homography) {
+		DoubleMatrix m = new DoubleMatrix(matches.getRows()*2, 9);
+		// -x1 -y1 -1 0 0 0 x1x2 y1x2 x2
+		// 0 0 0 -x1 -y1 -1 x1y2 y1y2 y2
+		for(int i=0; i < matches.getRows(); i++) {
+			double x1 = matches.get(i, 0);
+			double y1 = matches.get(i, 1);
+			double x2 = matches.get(i, 2);
+			double y2 = matches.get(i, 3);
+			//
+			// -x1 -y1 -1
+			m.put(i*2, 0, -x1);	m.put(i*2, 1, -y1); m.put(i*2, 2, -1);
+			// 0 0 0
+			m.put(i*2, 3, 0); m.put(i*2, 4, 0);m.put(i*2, 5, 0);
+			// x2x2 y1x2 x2
+			m.put(i*2, 6, x1*x2); m.put(i*2, 7, y1*x2); m.put(i*2, 8, x2);
+			//
+			// 0 0 0
+			m.put(1+i*2, 0, 0); m.put(1+i*2, 1, 0);m.put(1+i*2, 2, 0);
+			// -x1 -y1 -1
+			m.put(1+i*2, 3, -x1); m.put(1+i*2, 4, -y1);m.put(1+i*2, 5, -1);
+			// 0 0 0
+			m.put(1+i*2, 6, x1*y2); m.put(1+i*2, 7, y1*y2);m.put(1+i*2, 8, y2);
+		}
+		// Now that the matrix is built, solve the homography.
+		DoubleMatrix[] usv = Singular.fullSVD(m);
+		int minRowIndex = usv[1].argmin();
+		System.out.println("Shape: " + usv[1].getRows() + " x " + usv[1].getColumns());
+		System.out.println("Min row: " + minRowIndex);
+		homography.addi(usv[2].getColumn(minRowIndex).reshape(3, 3));
+		return usv[1].get(minRowIndex);
 	}
 }
