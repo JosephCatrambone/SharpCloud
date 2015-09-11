@@ -9,14 +9,35 @@ import org.jblas.DoubleMatrix;
 import org.jblas.ranges.IntervalRange;
 
 import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
 import java.io.File;
 import java.io.IOException;
+import java.util.Random;
 
 /**
  * Created by josephcatrambone on 8/17/15.
  */
 public class ImageTools {
+	public static void visualizeCorrespondence(String image1, String image2, DoubleMatrix points) {
+		try {
+			Random random = new Random();
+			BufferedImage img1 = ImageIO.read(new File(image1));
+			BufferedImage img2 = ImageIO.read(new File(image2));
+			BufferedImage result = new BufferedImage(img1.getWidth()+img2.getWidth(), img1.getHeight(), BufferedImage.TYPE_INT_RGB);
+			Graphics2D g = (Graphics2D)result.getGraphics();
+			g.drawImage(img1, 0, 0, null);
+			g.drawImage(img2, img1.getWidth(), 0, null);
+			for(int i=0; i < points.getRows(); i++) {
+				g.setColor(new java.awt.Color(random.nextInt(255), random.nextInt(255), random.nextInt(255)));
+				g.drawLine((int)points.get(i, 0), (int)points.get(i, 1), (int)points.get(i, 2)+img1.getWidth(), (int)points.get(i, 3));
+			}
+			ImageIO.write(result, "png", new File("result.png"));
+		} catch(IOException ioe) {
+		}
+	}
+
 	public static DoubleMatrix imageFileToMatrix(String filename, int width, int height) {
 		try {
 			BufferedImage img = ImageIO.read(new File(filename));
@@ -86,7 +107,7 @@ public class ImageTools {
 		WritableImage scaledImage = new WritableImage(width, height);
 
 		SnapshotParameters parameters = new SnapshotParameters();
-		parameters.setFill(Color.TRANSPARENT);
+		parameters.setFill(javafx.scene.paint.Color.TRANSPARENT);
 		imageView.snapshot(parameters, scaledImage);
 
 		PixelReader img = scaledImage.getPixelReader();
@@ -110,7 +131,7 @@ public class ImageTools {
 			for(int x=0; x < matrix.getColumns(); x++) {
 				double color = matrix.get(y, x);
 				color = (color-min)/(max-min);
-				pw.setColor(x, y, Color.gray(color));
+				pw.setColor(x, y, javafx.scene.paint.Color.gray(color));
 			}
 		}
 

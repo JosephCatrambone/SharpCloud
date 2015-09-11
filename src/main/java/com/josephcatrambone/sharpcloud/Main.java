@@ -24,10 +24,17 @@ public class Main {
 		DoubleMatrix dismat = HomographyTools.buildDistanceMatrix(windows1, windows2);
 		Map<Integer,Integer> matches = HomographyTools.getBestPairs(dismat, -1);
 		System.out.println("Points columns: " + points1.getColumns());
+		DoubleMatrix correspondences = new DoubleMatrix(points1.getRows(), 4);
+
 		for(Integer a : matches.keySet()) {
 			Integer b = matches.get(a);
-			System.out.println(points1.getRow(a) + " -> " + points2.getRow(b));
+			correspondences.put(a, 0, points1.get(a, 0));
+			correspondences.put(a, 1, points1.get(a, 1));
+			correspondences.put(a, 2, points2.get(b, 0));
+			correspondences.put(a, 3, points2.get(b, 1));
 		}
+
+		ImageTools.visualizeCorrespondence(args[0], args[1], correspondences);
 		/*
 		for(int i=0; i < features.getRows(); i++) {
 			DoubleMatrix image = features.getColumnRange(i, 2, features.getColumns());
