@@ -3,8 +3,10 @@ package com.josephcatrambone.sharpcloud;
 import org.jblas.DoubleMatrix;
 import org.jblas.Singular;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 
 /**
  * Created by Jo on 9/7/2015.
@@ -100,9 +102,31 @@ public class HomographyTools {
 		// Now that the matrix is built, solve the homography.
 		DoubleMatrix[] usv = Singular.fullSVD(m);
 		int minRowIndex = usv[1].argmin();
-		System.out.println("Shape: " + usv[1].getRows() + " x " + usv[1].getColumns());
-		System.out.println("Min row: " + minRowIndex);
 		homography.addi(usv[2].getColumn(minRowIndex).reshape(3, 3));
 		return usv[1].get(minRowIndex);
+	}
+
+	public static DoubleMatrix RANSACHomography(DoubleMatrix matches, int subgroupSize, double threshold, int maxIterations) {
+		// Try getting a homography with a bunch of randomly chosen subgroups.
+		// Init our return matrix, and split the points into two [x, y, 1] row-based groups.
+		// We need this so when we multiply out p*h = p', we can quickly compare the two.
+		DoubleMatrix homography = null;
+		DoubleMatrix points1 = DoubleMatrix.concatHorizontally(matches.getColumns(new int[]{0, 1}), DoubleMatrix.ones(matches.getRows(), 1));
+		DoubleMatrix points2 = DoubleMatrix.concatHorizontally(matches.getColumns(new int[]{2, 3}), DoubleMatrix.ones(matches.getRows(), 1));
+		Random random = new Random();
+
+		double error = Double.POSITIVE_INFINITY;
+		while(error > threshold && maxIterations-- > 0) {
+			int[] selection = new int[subgroupSize];
+			Arrays.parallelSetAll(selection, i -> random.nextInt(matches.getRows()));
+			DoubleMatrix candidate = new DoubleMatrix(3, 3);
+			double selectionError = solveDLT(matches.getRows(selection), candidate);
+			double tempError = points1.mmul(candidate).distance2(points2);
+			if(tempError < error) {
+				error = tempError;
+				homography = candidate;
+			}
+		}
+		return homography;
 	}
 }

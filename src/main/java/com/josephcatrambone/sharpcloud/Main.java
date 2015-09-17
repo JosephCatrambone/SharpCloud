@@ -41,9 +41,9 @@ public class Main {
 
 		// Visualize matches and find homography.
 		ImageTools.visualizeCorrespondence(args[0], args[1], correspondences);
-		DoubleMatrix homography = new DoubleMatrix(3, 3);
-		double homographyError = HomographyTools.solveDLT(correspondences, homography);
-		System.out.println("Homography error: " + homographyError);
+		//DoubleMatrix homography = new DoubleMatrix(3, 3);
+		//double homographyError = HomographyTools.solveDLT(correspondences, homography);
+		DoubleMatrix homography = HomographyTools.RANSACHomography(correspondences, (int)(correspondences.getRows()*0.1), 0.1, 10000);
 		System.out.println("Homography: " + homography);
 		/*
 		for(int i=0; i < features.getRows(); i++) {
