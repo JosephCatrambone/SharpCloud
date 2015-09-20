@@ -102,7 +102,8 @@ public class HomographyTools {
 		// Now that the matrix is built, solve the homography.
 		DoubleMatrix[] usv = Singular.fullSVD(m);
 		int minRowIndex = usv[1].argmin();
-		homography.addi(usv[2].getColumn(minRowIndex).reshape(3, 3));
+		homography.addi(usv[2].getColumn(minRowIndex).reshape(3, 3).transpose());
+		homography.divi(homography.get(2, 2));
 		return usv[1].get(minRowIndex);
 	}
 
@@ -121,7 +122,7 @@ public class HomographyTools {
 			Arrays.parallelSetAll(selection, i -> random.nextInt(matches.getRows()));
 			DoubleMatrix candidate = new DoubleMatrix(3, 3);
 			double selectionError = solveDLT(matches.getRows(selection), candidate);
-			double tempError = points1.mmul(candidate).distance2(points2);
+			double tempError = candidate.mmul(points1.transpose()).transpose().distance2(points2);
 			if(tempError < error) {
 				error = tempError;
 				homography = candidate;
