@@ -43,8 +43,7 @@ public class Main {
 		ImageTools.visualizeCorrespondence(args[0], args[1], correspondences);
 		//DoubleMatrix homography = new DoubleMatrix(3, 3);
 		//double homographyError = HomographyTools.solveDLT(correspondences, homography);
-		DoubleMatrix homography = HomographyTools.RANSACHomography(correspondences, (int)(correspondences.getRows()*0.1), 0.1, 10000);
-		System.out.println("Homography: " + homography);
+		DoubleMatrix homography = HomographyTools.RANSACHomography(correspondences, (int)(correspondences.getRows()*0.1), 0.01, 1000);
 		/*
 		for(int i=0; i < features.getRows(); i++) {
 			DoubleMatrix image = features.getColumnRange(i, 2, features.getColumns());
