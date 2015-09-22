@@ -9,12 +9,16 @@ import org.jblas.ranges.IntervalRange;
  */
 public class TriangulationTools {
 	/*** getFundamentalMatrix
-	 * An implementation of the eight-point method.
+	 * An implementation of the eight-point method.  Get the fundamental matrix of camera 2.
 	 *
 	 * @param matches A 2D matrix where each row is a matching pair of points(x y) (x' y')
 	 * @return
 	 */
 	public static DoubleMatrix getFundamentalMatrix(DoubleMatrix matches) {
+		// TODO: Normalize the points into the -1 1 range and recenter them.
+		//  Normalization isn't working great.  Find out why.
+
+		// Run eight-point algo.
 		DoubleMatrix equation = new DoubleMatrix(matches.getRows(), 9);
 		for(int i=0; i < matches.getRows(); i++) {
 			double x1 = matches.get(i, 0);
@@ -23,26 +27,34 @@ public class TriangulationTools {
 			double y2 = matches.get(i, 3);
 
 			equation.put(i, 0, x1*x2);
-			equation.put(i, 1, y1*x2);
-			equation.put(i, 2, x2);
-			equation.put(i, 3, x1*y2);
+			equation.put(i, 1, x1*y2);
+			equation.put(i, 2, x1);
+			equation.put(i, 3, y1*x2);
 			equation.put(i, 4, y1*y2);
-			equation.put(i, 5, y2);
-			equation.put(i, 6, x1);
-			equation.put(i, 7, y1);
+			equation.put(i, 5, y1);
+			equation.put(i, 6, x2);
+			equation.put(i, 7, y2);
 			equation.put(i, 8, 1);
 		}
 
 		// Compute the fundamental matrix with svd.
 		DoubleMatrix[] usv = Singular.fullSVD(equation);
-		DoubleMatrix fundamental = usv[2].getColumn(8).reshape(3, 3).transpose();
+		// We want the last row of VT, so we can just get the last column of V
+		DoubleMatrix fundamental = usv[2].getColumn(usv[1].argmin()).reshape(3, 3);
 
 		// Constrain by zeroing last SV.
 		usv = Singular.fullSVD(fundamental);
-		usv[1].put(2, 0); // TODO: verify S shape is linear.
-		fundamental = usv[0].mmul(DoubleMatrix.diag(usv[1]).mmul(usv[2].transpose()));
+		usv[1].put(2, 0);
+		return usv[0].mmul(DoubleMatrix.diag(usv[1])).mmul(usv[2].transpose());
+	}
 
-		return fundamental;
+	public static DoubleMatrix getEpipole(DoubleMatrix fundamental) {
+		// pass fundamental.transpose() for left-epipole.
+		// Compute the null subspace of F -> Fe = 0
+		DoubleMatrix[] usv = Singular.fullSVD(fundamental);
+		DoubleMatrix pole = usv[2].getRow(usv[2].getRows() - 1);
+		pole.divi(pole.get(2));
+		return pole;
 	}
 
 	/*** triangulatePoint
@@ -77,5 +89,11 @@ public class TriangulationTools {
 		DoubleMatrix point4d = point.getRows(new IntervalRange(0, 5));
 		point4d.divi(point4d.get(3));
 		return point4d.getRows(new IntervalRange(0, 3)).transpose();
+	}
+
+	public static DoubleMatrix cameraMatrixFromFundamentalMatrix(DoubleMatrix fundamental) {
+		DoubleMatrix leftEpipole = getEpipole(fundamental.transpose());
+		DoubleMatrix skewEpipole = PointTools.skew(leftEpipole.get(0), leftEpipole.get(1), leftEpipole.get(2));
+		return DoubleMatrix.concatVertically(skewEpipole.mmul(fundamental.transpose()).transpose(), leftEpipole).transpose();
 	}
 }
