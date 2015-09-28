@@ -21,6 +21,21 @@ public class CameraMatrix extends DoubleMatrix {
 	public double translationY = 0.0;
 	public double translationZ = 0.0;
 
+	public CameraMatrix() {}
+
+	public CameraMatrix(double f, double dx, double dy, double dz, double rx, double ry, double rz) {
+		focalX = 1.0/f;
+		focalY = 1.0/f;
+
+		translationX = dx;
+		translationY = dy;
+		translationZ = dz;
+
+		rotX = rx;
+		rotY = ry;
+		rotZ = rz;
+	}
+
 	/***
 	 * Given a 4xn array of augmented points with one row = [x, y, z, 1], return 3xn un-normalized outputs. [x, y, ?]
 	 * @param points

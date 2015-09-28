@@ -50,7 +50,7 @@ public class TriangulationTools {
 		// Constrain by zeroing last SV.
 		usv = Singular.fullSVD(fundamental);
 		usv[1].put(2, 0);
-		return usv[0].mmul(DoubleMatrix.diag(usv[1])).mmul(usv[2].transpose());
+		return usv[0].mmul(DoubleMatrix.diag(usv[1])).mmul(usv[2].transpose()).transpose();
 	}
 
 	public static DoubleMatrix getEpipole(DoubleMatrix fundamental) {
