@@ -102,29 +102,37 @@ public class TriangulationTools {
 		return DoubleMatrix.concatVertically(skewEpipole.mmul(fundamental.transpose()).transpose(), leftEpipole).transpose();
 	}
 
-	/*** Compute Sampson Distance
-	 * Given the funamental matrix and two nx3 point sets, compute the error.
-	 * @param fundamental
-	 * @param p1
-	 * @param p2
-	 * @return
+	/*** getFundamentalError
+	 * Given the funamental matrix and two nx3 (augmented) point sets, compute per-point error.
+	 * WARNING: points sets will be augmented in-function.
+	 * @param fundamental The 3x3 rank-two matrix.
+	 * @param p1 An nx3 set of augmented points.  One row = x y 1.
+	 * @param p2 An nx3 set of augmented points.
+	 * @return Returns the total error.
 	 */
-	public static DoubleMatrix getFundamentalError(DoubleMatrix fundamental, DoubleMatrix p1, DoubleMatrix p2) {
-		DoubleMatrix fx1 = fundamental.mmul(p1.transpose()).transpose();
-		DoubleMatrix fx2 = fundamental.mmul(p2.transpose()).transpose();
+	public static double getFundamentalError(DoubleMatrix fundamental, DoubleMatrix p1, DoubleMatrix p2) {
+		// Algebraic distance(a,b) = (aFbT)^2
+		// Sampson Distance(a,b) = algebraic distance(a,b) * ( 1/((FbT)_x^2 + (FbT)_y^2) + 1/((aF)_x^2+ (aF)_y^2))
 
-		DoubleMatrix denom =
-			fx1.getColumn(0).mul(fx1.getColumn(0)).add(
-			fx1.getColumn(1).mul(fx1.getColumn(1))).add(
-			fx2.getColumn(0).mul(fx2.getColumn(0))).add(
-					fx2.getColumn(1).mul(fx2.getColumn(1)));
+		// p1 = nx3
+		// f = 3x3
+		// p2 = nx3
+		// p2T = 3xn
+		// p1 f p2T = nxn
+		final DoubleMatrix pairDistance = p1.mmul(fundamental.mmul(p2.transpose())); // Should be nxn
+		final DoubleMatrix pairDistanceSquared = pairDistance.mul(pairDistance); // ^2.
 
-		// DoubleMatrix.diag(p1.transpose().mmul(fundamental.mmul(p2.transpose()).transpose()))
-		//DoubleMatrix.diag(p1.mmul(fundamental.mmul(p2.transpose())))
-		DoubleMatrix numerator = DoubleMatrix.diag(p1.mmul(fundamental.mmul(p2.transpose())));
-		numerator = numerator.mul(numerator); // Numerator^2, maybe we can do this muli.
+		// Calculate the denominator for the sampson distance.
+		DoubleMatrix fb = fundamental.mmul(p2.transpose()).transpose(); // nx3
+		DoubleMatrix af = p1.mmul(fundamental); // nx3
+		fb.muli(fb); // nx3
+		af.muli(af); // nx3
+		DoubleMatrix fbInv = DoubleMatrix.ones(fb.getRows(), 1).divi(fb.getColumn(0).add(fb.getColumn(1)));
+		DoubleMatrix afInv = DoubleMatrix.ones(af.getRows(), 1).divi(af.getColumn(0).add(af.getColumn(1)));
+		DoubleMatrix sampsonScalar = afInv.add(fbInv);
 
-		return numerator.div(denom);
+		// Since a row matches with the corresponding column, we only care about the diagonal.
+		return pairDistanceSquared.diag().mul(sampsonScalar).sum();
 	}
 
 	public static DoubleMatrix RANSACFundamentalMatric(DoubleMatrix matches, double errorThreshold, int maxIterations) {

@@ -89,6 +89,17 @@ public class TriangulationTest {
 	}
 
 	@Test
+	public void testDistanceMetric() {
+		DoubleMatrix pts2d = pts1.dup();
+		PointTools.deaugment3D(pts2d); // Yeah, we're basically just dropping the Z component.
+		DoubleMatrix selfMatches = DoubleMatrix.concatHorizontally(pts2d, pts2d);
+		DoubleMatrix fund = TriangulationTools.getFundamentalMatrix(selfMatches);
+		pts2d = PointTools.augment(pts2d);
+		double error = TriangulationTools.getFundamentalError(fund, pts2d, pts2d);
+		//org.junit.Assert.assertTrue(error < ERROR_THRESHOLD);
+	}
+
+	@Test
 	public void testFundamentalMatrixRecovery() {
 		// Make matches from points 1 and points 2.
 		DoubleMatrix trueFundamental = DoubleMatrix.rand(3, 3);
@@ -104,9 +115,8 @@ public class TriangulationTest {
 		DoubleMatrix recoveredFundamental = TriangulationTools.getFundamentalMatrix(matches.getRows(new IntervalRange(0, 9)));
 		recoveredFundamental.divi(recoveredFundamental.get(0,0));
 
-		DoubleMatrix pointError = TriangulationTools.getFundamentalError(recoveredFundamental, pts1, pts2);
+		double error = TriangulationTools.getFundamentalError(recoveredFundamental, pts1, pts2);
 		//double error = trueFundamental.distance2(recoveredFundamental);
-		double error = pointError.sum();
 
 		System.out.println("Error: " + error);
 		trueFundamental.print();
