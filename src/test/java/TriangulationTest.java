@@ -1,6 +1,7 @@
 import com.josephcatrambone.sharpcloud.PointTools;
 import com.josephcatrambone.sharpcloud.TriangulationTools;
 import org.jblas.DoubleMatrix;
+import org.jblas.Singular;
 import org.jblas.ranges.IntervalRange;
 import org.junit.Before;
 import org.junit.Test;
@@ -36,11 +37,11 @@ public class TriangulationTest {
 		pts = DoubleMatrix.rand(NUM_POINTS, 3);
 
 		// Drift for camera 2.
-		double f = random.nextDouble()+0.01; // Focal distance.
-		double theta = 0; //random.nextDouble()*0.1*Math.PI/2; // Rotation.
-		double dx = random.nextDouble()*0.01; // Small offset.
-		double dy = random.nextDouble()*0.01; // Small offset.
-		double dz = random.nextDouble()*0.01; // Small offset.
+		double f = random.nextDouble()+0.1; // Focal distance.
+		double theta = random.nextDouble()*0.1*Math.PI/2; // Rotation.
+		double dx = random.nextDouble()*0.1; // Small offset.
+		double dy = random.nextDouble()*0.1; // Small offset.
+		double dz = random.nextDouble()*0.1; // Small offset.
 
 		// 3D rotation matrix about z
 		// ct -st 0
@@ -90,19 +91,26 @@ public class TriangulationTest {
 	@Test
 	public void testFundamentalMatrixRecovery() {
 		// Make matches from points 1 and points 2.
+		DoubleMatrix trueFundamental = DoubleMatrix.rand(3, 3);
+		DoubleMatrix[] svd = Singular.fullSVD(trueFundamental);
+		svd[1].put(2, 0); // Force rank 2.
+		trueFundamental = svd[0].mmul(DoubleMatrix.diag(svd[1])).mmul(svd[2].transpose());
+		trueFundamental.divi(trueFundamental.get(0, 0)); // Arbitrarily chose f00 to be 1.
+
+		// Multiply out points to get 'correspondence'.
+		pts2 = trueFundamental.mmul(pts1.transpose()).transpose(); // Still some camera distortion on pts1.
+		PointTools.deaugment3D(pts2);
 		DoubleMatrix matches = DoubleMatrix.concatHorizontally(pts1.getColumns(new IntervalRange(0, 2)), pts2.getColumns(new IntervalRange(0, 2)));
-		DoubleMatrix fundamental = TriangulationTools.getFundamentalMatrix(matches.getRows(new IntervalRange(0, 9)));
+		DoubleMatrix recoveredFundamental = TriangulationTools.getFundamentalMatrix(matches.getRows(new IntervalRange(0, 9)));
+		recoveredFundamental.divi(recoveredFundamental.get(0,0));
 
-		DoubleMatrix pointsPrime = fundamental.mmul(pts.transpose()).transpose();
-		PointTools.deaugment3D(pointsPrime);
-		System.out.println("F*p1 -> p2: " + pts2.distance2(pointsPrime));
+		DoubleMatrix pointError = TriangulationTools.getFundamentalError(recoveredFundamental, pts1, pts2);
+		//double error = trueFundamental.distance2(recoveredFundamental);
+		double error = pointError.sum();
 
-		// xTFx = 0
-
-		double sum = pts2.mmul(fundamental.mmul(pts1)).sum();
-
-		double error = sum;
 		System.out.println("Error: " + error);
+		trueFundamental.print();
+		recoveredFundamental.print();
 
 		// Verify sanity
 		//org.junit.Assert.assertTrue(error < ERROR_THRESHOLD);

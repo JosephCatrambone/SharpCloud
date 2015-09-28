@@ -5,7 +5,12 @@ import org.jblas.Singular;
 import org.jblas.ranges.IntervalRange;
 
 /**
- * Created by Jo on 9/16/2015.
+ * Created by Joseph Catrambone on 9/16/2015.
+ * To use this for multiple view reconstruction:
+ * - Detect features points and do matching.
+ * - Compute the fundamental matrices.
+ * - Compute the camera matrices from the fundamental matrices.
+ * - Triangulate the points from the fundamental matrices.
  */
 public class TriangulationTools {
 	/*** getFundamentalMatrix
@@ -95,5 +100,34 @@ public class TriangulationTools {
 		DoubleMatrix leftEpipole = getEpipole(fundamental.transpose());
 		DoubleMatrix skewEpipole = PointTools.skew(leftEpipole.get(0), leftEpipole.get(1), leftEpipole.get(2));
 		return DoubleMatrix.concatVertically(skewEpipole.mmul(fundamental.transpose()).transpose(), leftEpipole).transpose();
+	}
+
+	/*** Compute Sampson Distance
+	 * Given the funamental matrix and two nx3 point sets, compute the error.
+	 * @param fundamental
+	 * @param p1
+	 * @param p2
+	 * @return
+	 */
+	public static DoubleMatrix getFundamentalError(DoubleMatrix fundamental, DoubleMatrix p1, DoubleMatrix p2) {
+		DoubleMatrix fx1 = fundamental.mmul(p1.transpose()).transpose();
+		DoubleMatrix fx2 = fundamental.mmul(p2.transpose()).transpose();
+
+		DoubleMatrix denom =
+			fx1.getColumn(0).mul(fx1.getColumn(0)).add(
+			fx1.getColumn(1).mul(fx1.getColumn(1))).add(
+			fx2.getColumn(0).mul(fx2.getColumn(0))).add(
+					fx2.getColumn(1).mul(fx2.getColumn(1)));
+
+		// DoubleMatrix.diag(p1.transpose().mmul(fundamental.mmul(p2.transpose()).transpose()))
+		//DoubleMatrix.diag(p1.mmul(fundamental.mmul(p2.transpose())))
+		DoubleMatrix numerator = DoubleMatrix.diag(p1.mmul(fundamental.mmul(p2.transpose())));
+		numerator = numerator.mul(numerator); // Numerator^2, maybe we can do this muli.
+
+		return numerator.div(denom);
+	}
+
+	public static DoubleMatrix RANSACFundamentalMatric(DoubleMatrix matches, double errorThreshold, int maxIterations) {
+		return null;
 	}
 }
