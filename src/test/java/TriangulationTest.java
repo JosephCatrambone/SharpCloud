@@ -2,8 +2,6 @@ import com.josephcatrambone.sharpcloud.CameraMatrix;
 import com.josephcatrambone.sharpcloud.PointTools;
 import com.josephcatrambone.sharpcloud.TriangulationTools;
 import org.jblas.DoubleMatrix;
-import org.jblas.Singular;
-import org.jblas.ranges.IntervalRange;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -89,7 +87,7 @@ public class TriangulationTest {
 		// Try calculating with pts1 -> pts2
 		matches = DoubleMatrix.concatHorizontally(pts1.getColumns(xyCols), pts2.getColumns(xyCols));
 		fundamental = TriangulationTools.getFundamentalMatrix(matches);
-		error = TriangulationTools.getFundamentalError(fundamental, pts1, pts2);
+		error = TriangulationTools.getFundamentalError(fundamental, pts1, pts2, 0, null);
 
 		org.junit.Assert.assertTrue(error < ERROR_THRESHOLD);
 	}

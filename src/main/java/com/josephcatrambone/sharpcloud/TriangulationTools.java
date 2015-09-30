@@ -4,6 +4,9 @@ import org.jblas.DoubleMatrix;
 import org.jblas.Singular;
 import org.jblas.ranges.IntervalRange;
 
+import java.util.Arrays;
+import java.util.function.IntUnaryOperator;
+
 /**
  * Created by Joseph Catrambone on 9/16/2015.
  * To use this for multiple view reconstruction:
@@ -97,9 +100,9 @@ public class TriangulationTools {
 	}
 
 	public static DoubleMatrix cameraMatrixFromFundamentalMatrix(DoubleMatrix fundamental) {
-		DoubleMatrix leftEpipole = getEpipole(fundamental.transpose());
+		DoubleMatrix leftEpipole = getEpipole(fundamental);
 		DoubleMatrix skewEpipole = PointTools.skew(leftEpipole.get(0), leftEpipole.get(1), leftEpipole.get(2));
-		return DoubleMatrix.concatVertically(skewEpipole.mmul(fundamental.transpose()).transpose(), leftEpipole).transpose();
+		return DoubleMatrix.concatVertically(skewEpipole.mmul(fundamental), leftEpipole).transpose();
 	}
 
 	/*** getFundamentalError
@@ -108,9 +111,11 @@ public class TriangulationTools {
 	 * @param fundamental The 3x3 rank-two matrix.
 	 * @param p1 An nx3 set of augmented points.  One row = x y 1.
 	 * @param p2 An nx3 set of augmented points.
+	 * @param matchThreshold The threshold for a point to be 'matching'.  Ignored if inliers is null.
+	 * @param inliers null OR an array of length n which will be filled with true if a point's error is less than matchThreshold or false otherwise.
 	 * @return Returns the total error.
 	 */
-	public static double getFundamentalError(DoubleMatrix fundamental, DoubleMatrix p1, DoubleMatrix p2) {
+	public static double getFundamentalError(DoubleMatrix fundamental, DoubleMatrix p1, DoubleMatrix p2, double matchThreshold, boolean[] inliers) {
 		// Algebraic distance(a,b) = (aFbT)^2
 		// Sampson Distance(a,b) = algebraic distance(a,b) * ( 1/((FbT)_x^2 + (FbT)_y^2) + 1/((aF)_x^2+ (aF)_y^2))
 
@@ -132,7 +137,19 @@ public class TriangulationTools {
 		DoubleMatrix sampsonScalar = afInv.add(fbInv);
 
 		// Since a row matches with the corresponding column, we only care about the diagonal.
-		return pairDistanceSquared.diag().mul(sampsonScalar).sum();
+		DoubleMatrix sampsonDistance = pairDistanceSquared.diag().mul(sampsonScalar);
+
+		// Parallel set inliers.
+		if(inliers != null) {
+			assert(inliers.length == p1.getRows());
+			//Arrays.parallelSetAll(inliers, (i) -> sampsonDistance.get(i) < matchThreshold);
+			// Bullshit that we can't use lambda here.  No boolean[] operator?
+			for(int i=0; i < inliers.length; i++) {
+				inliers[i] = sampsonDistance.get(i) < matchThreshold;
+			}
+		}
+
+		return sampsonDistance.sum();
 	}
 
 	public static DoubleMatrix RANSACFundamentalMatric(DoubleMatrix matches, double errorThreshold, int maxIterations) {
