@@ -110,6 +110,11 @@ public class TriangulationTest {
 		System.out.println("True camera: ");
 		camera2.getCombinedMatrix().print();
 
-		org.junit.Assert.assertTrue(error < ERROR_THRESHOLD);
+		DoubleMatrix reprojected = recoveredCamera.mmul(ptsAug.transpose()).transpose();
+		PointTools.deaugment3D(reprojected);
+
+		System.out.println(pts2.distance2(reprojected));
+
+		//org.junit.Assert.assertTrue(error < ERROR_THRESHOLD);
 	}
 }

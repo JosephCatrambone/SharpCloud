@@ -60,7 +60,7 @@ public class TriangulationTools {
 		// pass fundamental.transpose() for left-epipole.
 		// Compute the null subspace of F -> Fe = 0
 		DoubleMatrix[] usv = Singular.fullSVD(fundamental);
-		DoubleMatrix pole = usv[2].getRow(usv[2].getRows() - 1);
+		DoubleMatrix pole = usv[2].getColumn(usv[2].getColumns() - 1).transpose();
 		pole.divi(pole.get(2));
 		return pole;
 	}
@@ -100,9 +100,9 @@ public class TriangulationTools {
 	}
 
 	public static DoubleMatrix cameraMatrixFromFundamentalMatrix(DoubleMatrix fundamental) {
-		DoubleMatrix leftEpipole = getEpipole(fundamental);
+		DoubleMatrix leftEpipole = getEpipole(fundamental.transpose());
 		DoubleMatrix skewEpipole = PointTools.skew(leftEpipole.get(0), leftEpipole.get(1), leftEpipole.get(2));
-		return DoubleMatrix.concatVertically(skewEpipole.mmul(fundamental), leftEpipole).transpose();
+		return DoubleMatrix.concatVertically(skewEpipole.mmul(fundamental.transpose()).transpose(), leftEpipole).transpose();
 	}
 
 	/*** getFundamentalError
@@ -152,7 +152,27 @@ public class TriangulationTools {
 		return sampsonDistance.sum();
 	}
 
-	public static DoubleMatrix RANSACFundamentalMatric(DoubleMatrix matches, double errorThreshold, int maxIterations) {
-		return null;
+	public static DoubleMatrix RANSACFundamentalMatrix(DoubleMatrix matches, int subgroupSize, double errorThreshold, int maxIterations) {
+		java.util.Random random = new java.util.Random(); // Avoid namespace conflict with jblas.
+		DoubleMatrix bestFundamental = null;
+		double bestError = Double.POSITIVE_INFINITY;
+
+		int[] subgroup = new int[subgroupSize];
+		int[] p1Columns = new int[]{0, 1};
+		int[] p2Columns = new int[]{2, 3};
+		for(int i=0; i < maxIterations && bestError > errorThreshold; i++) {
+			Arrays.parallelSetAll(subgroup, operand -> random.nextInt(matches.getRows()));
+			DoubleMatrix matchSubgroup = matches.getRows(subgroup);
+			DoubleMatrix candidate = getFundamentalMatrix(matchSubgroup);
+			DoubleMatrix pts1 = matchSubgroup.getColumns(p1Columns);
+			DoubleMatrix pts2 = matchSubgroup.getColumns(p2Columns);
+			double candidateError = getFundamentalError(candidate, pts1, pts2, 0, null);
+			if(candidateError < bestError) {
+				bestError = candidateError;
+				bestFundamental = candidate;
+			}
+		}
+
+		return bestFundamental;
 	}
 }
