@@ -9,14 +9,17 @@ import org.junit.Test;
  * Created by Jo on 9/16/2015.
  */
 public class TriangulationTest {
+	final double RANGE = 10.0;
 	final double ERROR_THRESHOLD = 0.1;
 	final int NUM_POINTS = 100;
+	final int[] xyCols = new int[]{0, 1};
 	DoubleMatrix pts; // Randomly generated points nx3
 	DoubleMatrix ptsAug; // Augmented nx4 points.
 	CameraMatrix camera1; // Randomly rotated camera.
 	CameraMatrix camera2; // Offset from camrea 1.
 	DoubleMatrix pts1; // Points projected by camera 1.  nx3
 	DoubleMatrix pts2;
+	DoubleMatrix matches;
 
 	@Before
 	public void setup() {
@@ -26,11 +29,11 @@ public class TriangulationTest {
 		pts = DoubleMatrix.rand(NUM_POINTS, 3);
 
 		// Drift for camera 2.
-		double f = random.nextDouble()+0.1; // Focal distance.
-		double theta = random.nextDouble()*0.1*Math.PI/2; // Rotation.
-		double dx = random.nextDouble()*0.1; // Small offset.
-		double dy = random.nextDouble()*0.1; // Small offset.
-		double dz = random.nextDouble()*0.1; // Small offset.
+		double f = 1.0; //random.nextDouble()+0.5; // Focal distance.
+		double theta = random.nextDouble()*RANGE*Math.PI/2; // Rotation.
+		double dx = random.nextDouble()*RANGE;
+		double dy = random.nextDouble()*RANGE;
+		double dz = random.nextDouble()*RANGE;
 
 		// 3D rotation matrix about z
 		// ct -st 0
@@ -58,6 +61,8 @@ public class TriangulationTest {
 
 		PointTools.deaugment3D(pts1);
 		PointTools.deaugment3D(pts2);
+
+		matches = DoubleMatrix.concatHorizontally(pts1.getColumns(xyCols), pts2.getColumns(xyCols));
 	}
 
 	@Test
@@ -79,13 +84,10 @@ public class TriangulationTest {
 
 	@Test
 	public void testFundamentalMatrixRecovery() {
-		int[] xyCols = new int[]{0, 1};
 		double error;
-		DoubleMatrix matches;
 		DoubleMatrix fundamental;
 
 		// Try calculating with pts1 -> pts2
-		matches = DoubleMatrix.concatHorizontally(pts1.getColumns(xyCols), pts2.getColumns(xyCols));
 		fundamental = TriangulationTools.getFundamentalMatrix(matches);
 		error = TriangulationTools.getFundamentalError(fundamental, pts1, pts2, 0, null);
 
@@ -93,28 +95,45 @@ public class TriangulationTest {
 	}
 
 	@Test
-	public void testCameraMatrixRecoveryFromFundamental() {
-		int[] xyCols = new int[]{0, 1};
-		double error;
-
-		final DoubleMatrix matches = DoubleMatrix.concatHorizontally(pts1.getColumns(xyCols), pts2.getColumns(xyCols));
+	public void testEpipoleRecovery() {
 		final DoubleMatrix fundamental = TriangulationTools.getFundamentalMatrix(matches);
+		DoubleMatrix leftEpipole = TriangulationTools.getEpipole(fundamental.transpose());
+		DoubleMatrix rightEpipole = TriangulationTools.getEpipole(fundamental);
+		DoubleMatrix leftEpipoleNullSpaceProduct = leftEpipole.mmul(fundamental); // Should be zero.
+		DoubleMatrix rightEpipoleNullSpaceProduct = rightEpipole.mmul(fundamental.transpose());
 
+		org.junit.Assert.assertTrue(leftEpipoleNullSpaceProduct.sum() < ERROR_THRESHOLD);
+		org.junit.Assert.assertTrue(rightEpipoleNullSpaceProduct.sum() < ERROR_THRESHOLD);
+	}
+
+	@Test
+	public void testCameraMatrixRecoveryFromFundamental() {
+		double error;
+		final DoubleMatrix cameraMatrix = camera2.getCombinedMatrix();
+		final DoubleMatrix fundamental = TriangulationTools.getFundamentalMatrix(matches);
 		final DoubleMatrix recoveredCamera = TriangulationTools.cameraMatrixFromFundamentalMatrix(fundamental);
+		error = recoveredCamera.distance1(cameraMatrix);
 
-		error = recoveredCamera.distance2(camera2.getCombinedMatrix());
+		// leftEpipole.mmul(fundamental) = 0
+		// If e is the left epipole, eTF = 0
+		// Left epipole -> eTF=0
+		//DoubleMatrix.concatHorizontally(PointTools.skew(leftEpipole.get(0), leftEpipole.get(1), leftEpipole.get(2)).mmul(fundamental), leftEpipole.transpose()).distance2(camera2.getCombinedMatrix())
 
-		System.out.println("Camera recovered: ");
-		recoveredCamera.print();
+		//DoubleMatrix reprojected = recoveredCamera.mmul(ptsAug.transpose()).transpose();
+		//PointTools.deaugment3D(reprojected);
+		//System.out.println(pts2.distance2(reprojected));
 
-		System.out.println("True camera: ");
-		camera2.getCombinedMatrix().print();
+		org.junit.Assert.assertTrue(error < ERROR_THRESHOLD*RANGE*100);
+	}
 
-		DoubleMatrix reprojected = recoveredCamera.mmul(ptsAug.transpose()).transpose();
-		PointTools.deaugment3D(reprojected);
+	@Test
+	public void testCameraMatrixRecoveryFromRansac() {
+		double error;
+		final DoubleMatrix cameraMatrix = camera2.getCombinedMatrix();
+		final DoubleMatrix fundamental = TriangulationTools.RANSACFundamentalMatrix(matches, 8, ERROR_THRESHOLD, 100000);
+		final DoubleMatrix recoveredCamera = TriangulationTools.cameraMatrixFromFundamentalMatrix(fundamental);
+		error = recoveredCamera.distance1(cameraMatrix);
 
-		System.out.println(pts2.distance2(reprojected));
-
-		//org.junit.Assert.assertTrue(error < ERROR_THRESHOLD);
+		org.junit.Assert.assertTrue(error < ERROR_THRESHOLD*RANGE*10);
 	}
 }

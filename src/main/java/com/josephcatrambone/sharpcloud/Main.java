@@ -51,5 +51,13 @@ public class Main {
 			ImageTools.matrixToDiskAsImage(image, "output_" + i + "_" + features.get(i, 0) + "_" + features.get(i, 1) + ".png");
 		}
 		*/
+
+		DoubleMatrix fundamental = TriangulationTools.RANSACFundamentalMatrix(correspondences, 8, 1.0, 1000);
+		DoubleMatrix origin = new CameraMatrix().getCombinedMatrix();
+		DoubleMatrix pts3d = TriangulationTools.triangulatePoint(origin, fundamental, points1, points2);
+		PointTools.deaugment3D(pts3d);
+		for(int i=0; i < pts3d.getRows(); i++) {
+			System.out.println(pts3d.get(i, 0) + "," + pts3d.get(i, 1) + "," + pts3d.get(i, 2));
+		}
 	}
 }

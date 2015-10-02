@@ -4,6 +4,7 @@ import org.jblas.DoubleMatrix;
 import org.jblas.Singular;
 import org.jblas.ranges.IntervalRange;
 
+import java.awt.*;
 import java.util.Arrays;
 import java.util.function.IntUnaryOperator;
 
@@ -100,17 +101,20 @@ public class TriangulationTools {
 	}
 
 	public static DoubleMatrix cameraMatrixFromFundamentalMatrix(DoubleMatrix fundamental) {
-		DoubleMatrix leftEpipole = getEpipole(fundamental.transpose());
-		DoubleMatrix skewEpipole = PointTools.skew(leftEpipole.get(0), leftEpipole.get(1), leftEpipole.get(2));
+		final DoubleMatrix leftEpipole = getEpipole(fundamental.transpose());
+		final DoubleMatrix skewEpipole = PointTools.skew(leftEpipole.get(0), leftEpipole.get(1), leftEpipole.get(2));
+		// I have no idea which of these will produce the better results.
+		// Number two is mathematically correct.  Number one has performed better in all tests.
 		return DoubleMatrix.concatVertically(skewEpipole.mmul(fundamental.transpose()).transpose(), leftEpipole).transpose();
+		//return DoubleMatrix.concatHorizontally(skewEpipole.mmul(fundamental), leftEpipole.transpose());
 	}
 
 	/*** getFundamentalError
 	 * Given the funamental matrix and two nx3 (augmented) point sets, compute per-point error.
 	 * WARNING: points sets will be augmented in-function.
 	 * @param fundamental The 3x3 rank-two matrix.
-	 * @param p1 An nx3 set of augmented points.  One row = x y 1.
-	 * @param p2 An nx3 set of augmented points.
+	 * @param p1 An nx2 or nx3 set of augmented points.  One row = x y 1.
+	 * @param p2 An nx3 or nx3 set of augmented points.
 	 * @param matchThreshold The threshold for a point to be 'matching'.  Ignored if inliers is null.
 	 * @param inliers null OR an array of length n which will be filled with true if a point's error is less than matchThreshold or false otherwise.
 	 * @return Returns the total error.
@@ -118,6 +122,13 @@ public class TriangulationTools {
 	public static double getFundamentalError(DoubleMatrix fundamental, DoubleMatrix p1, DoubleMatrix p2, double matchThreshold, boolean[] inliers) {
 		// Algebraic distance(a,b) = (aFbT)^2
 		// Sampson Distance(a,b) = algebraic distance(a,b) * ( 1/((FbT)_x^2 + (FbT)_y^2) + 1/((aF)_x^2+ (aF)_y^2))
+
+		if(p1.getColumns() == 2) {
+			p1 = PointTools.augment(p1);
+		}
+		if(p2.getColumns() == 2) {
+			p2 = PointTools.augment(p2);
+		}
 
 		// p1 = nx3
 		// f = 3x3
