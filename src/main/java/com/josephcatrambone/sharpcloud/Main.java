@@ -8,6 +8,7 @@ import java.util.Map;
 public class Main {
 	public static void main(String[] args) {
 		final int WINDOW_SIZE = 10;
+		final double INLIER_THRESHOLD = 10.0;
 		//javafx.application.Application.launch(MainWindow.class);
 
 		// Load images and convert to matrix form.
@@ -15,6 +16,8 @@ public class Main {
 		DoubleMatrix m2 = ImageTools.imageFileToMatrix(args[1], -1, -1);
 
 		DoubleMatrix correspondences = ImageTools.getCorrespondences(m1, m2);
+		DoubleMatrix pts1 = correspondences.getColumns(new int[]{0, 1});
+		DoubleMatrix pts2 = correspondences.getColumns(new int[]{2, 3});
 
 		// Visualize matches and find homography.
 		ImageTools.visualizeCorrespondence(args[0], args[1], correspondences);
@@ -30,20 +33,22 @@ public class Main {
 		}
 		*/
 
-		DoubleMatrix fundamental = TriangulationTools.RANSACFundamentalMatrix(correspondences, 8, 1.0, 1000);
+		DoubleMatrix fundamental = TriangulationTools.RANSACFundamentalMatrix(correspondences, 8, 0.01, 100000);
 		DoubleMatrix origin = new CameraMatrix().getCombinedMatrix();
 		DoubleMatrix camera2 = TriangulationTools.cameraMatrixFromFundamentalMatrix(fundamental);
-		fundamental.print();
+		//boolean[] inliers = new boolean[pts1.getRows()];
+		//TriangulationTools.getFundamentalError(fundamental, pts1, pts2, INLIER_THRESHOLD, inliers);
 
 		for(int i=0; i < correspondences.getRows(); i++) {
-			DoubleMatrix pair = correspondences.getRow(i);
-			DoubleMatrix p3d = TriangulationTools.triangulatePoint(
-				origin,
-				camera2,
-				PointTools.augment(pair.getColumns(new int[]{0, 1})),
-				PointTools.augment(pair.getColumns(new int[]{2, 3}))
-			);
-			System.out.println(p3d.get(0) + "," + p3d.get(1) + "," + p3d.get(2));
+			if(true) { //inliers[i]) {
+				DoubleMatrix p3d = TriangulationTools.triangulatePoint(
+					origin,
+					camera2,
+					PointTools.augment(pts1.getRow(i)),
+					PointTools.augment(pts2.getRow(i))
+				);
+				System.out.println(p3d.get(0) + "," + p3d.get(1) + "," + p3d.get(2));
+			}
 		}
 	}
 }
