@@ -14,36 +14,14 @@ public class Main {
 		DoubleMatrix m1 = ImageTools.imageFileToMatrix(args[0], -1, -1);
 		DoubleMatrix m2 = ImageTools.imageFileToMatrix(args[1], -1, -1);
 
-		// Find features.
-		DoubleMatrix features1 = ImageTools.findFeaturePoints(m1, WINDOW_SIZE, 100, 1000);
-		DoubleMatrix features2 = ImageTools.findFeaturePoints(m2, WINDOW_SIZE, 100, 1000);
-
-		// Decompose into windows and point values.
-		DoubleMatrix points1 = features1.getColumns(new IntervalRange(0, 2));
-		DoubleMatrix points2 = features2.getColumns(new IntervalRange(0, 2));
-		DoubleMatrix windows1 = features1.getColumns(new IntervalRange(2, features1.getColumns()));
-		DoubleMatrix windows2 = features2.getColumns(new IntervalRange(2, features2.getColumns()));
-
-		// Use the windows (basically feature descriptors) to find matches.
-		// Then convert the match indices into a matrix with four columns (two xy pairs for each match).
-		DoubleMatrix dismat = HomographyTools.buildDistanceMatrix(windows1, windows2);
-		Map<Integer,Integer> matches = HomographyTools.getBestPairs(dismat, -1);
-		System.out.println("Points columns: " + points1.getColumns());
-		DoubleMatrix correspondences = new DoubleMatrix(points1.getRows(), 4);
-
-		for(Integer a : matches.keySet()) {
-			Integer b = matches.get(a);
-			correspondences.put(a, 0, points1.get(a, 0));
-			correspondences.put(a, 1, points1.get(a, 1));
-			correspondences.put(a, 2, points2.get(b, 0));
-			correspondences.put(a, 3, points2.get(b, 1));
-		}
+		DoubleMatrix correspondences = ImageTools.getCorrespondences(m1, m2);
 
 		// Visualize matches and find homography.
 		ImageTools.visualizeCorrespondence(args[0], args[1], correspondences);
 		//DoubleMatrix homography = new DoubleMatrix(3, 3);
 		//double homographyError = HomographyTools.solveDLT(correspondences, homography);
-		DoubleMatrix homography = HomographyTools.RANSACHomography(correspondences, (int)(correspondences.getRows()*0.1), 0.01, 1000);
+		//DoubleMatrix homography = HomographyTools.RANSACHomography(correspondences, (int)(correspondences.getRows()*0.1), 0.01, 1000);
+
 		/*
 		for(int i=0; i < features.getRows(); i++) {
 			DoubleMatrix image = features.getColumnRange(i, 2, features.getColumns());
@@ -54,10 +32,18 @@ public class Main {
 
 		DoubleMatrix fundamental = TriangulationTools.RANSACFundamentalMatrix(correspondences, 8, 1.0, 1000);
 		DoubleMatrix origin = new CameraMatrix().getCombinedMatrix();
-		DoubleMatrix pts3d = TriangulationTools.triangulatePoint(origin, fundamental, points1, points2);
-		PointTools.deaugment3D(pts3d);
-		for(int i=0; i < pts3d.getRows(); i++) {
-			System.out.println(pts3d.get(i, 0) + "," + pts3d.get(i, 1) + "," + pts3d.get(i, 2));
+		DoubleMatrix camera2 = TriangulationTools.cameraMatrixFromFundamentalMatrix(fundamental);
+		fundamental.print();
+
+		for(int i=0; i < correspondences.getRows(); i++) {
+			DoubleMatrix pair = correspondences.getRow(i);
+			DoubleMatrix p3d = TriangulationTools.triangulatePoint(
+				origin,
+				camera2,
+				PointTools.augment(pair.getColumns(new int[]{0, 1})),
+				PointTools.augment(pair.getColumns(new int[]{2, 3}))
+			);
+			System.out.println(p3d.get(0) + "," + p3d.get(1) + "," + p3d.get(2));
 		}
 	}
 }

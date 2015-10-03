@@ -14,6 +14,8 @@ import java.awt.image.BufferedImage;
 import java.awt.image.ColorModel;
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 /**
@@ -48,6 +50,19 @@ public class ImageTools {
 	}
 
 	public static boolean matrixToDiskAsImage(DoubleMatrix matrix, String filename) {
+		return matrixToDiskAsImage(matrix, filename, true);
+	}
+
+	public static boolean matrixToDiskAsImage(DoubleMatrix matrix, String filename, boolean normalize) {
+
+		// Normalize contrast to 0-1.
+		if(normalize) {
+			double min = matrix.min();
+			double max = matrix.max();
+			DoubleMatrix preimg = matrix.sub(min).div(max - min);
+			matrix = preimg;
+		}
+
 		BufferedImage img = matrixToAWTImage(matrix);
 		try {
 			ImageIO.write(img, "png", new File(filename));
@@ -85,7 +100,7 @@ public class ImageTools {
 		BufferedImage img = new BufferedImage(matrix.getColumns(), matrix.getRows(), BufferedImage.TYPE_BYTE_GRAY);
 		for(int y=0; y < matrix.getRows(); y++) {
 			for(int x=0; x < matrix.getColumns(); x++) {
-				img.setRGB(x, y, (int)(255*matrix.get(y, x)));
+				img.setRGB(x, y, (int) (255 * matrix.get(y, x)));
 			}
 		}
 		return img;
@@ -147,24 +162,78 @@ public class ImageTools {
 		return true;
 	}
 
-	public static DoubleMatrix edgeDetector(DoubleMatrix image) {
-		// Calculate X and Y gradients
-		DoubleMatrix dx = image.getColumns(new IntervalRange(0, image.getColumns()-1)).sub(image.getColumns(new IntervalRange(1, image.getColumns())));
-		DoubleMatrix dy = image.getRows(new IntervalRange(0, image.getRows() - 1)).sub(image.getRows(new IntervalRange(1, image.getRows())));
+	public static double getGaussian(double x, double y, double sigma) {
+		return Math.exp(-(x*x + y*y)/(2.0*sigma*sigma))/(2.0*sigma*sigma*Math.PI);
+	}
 
-		// The gradient calculation leaves the matrices slightly smaller.  Pad them back to normal size.
-		dx = DoubleMatrix.concatHorizontally(dx, DoubleMatrix.zeros(dx.getRows(), 1));
-		dy = DoubleMatrix.concatVertically(dy, DoubleMatrix.zeros(1, dy.getColumns()));
+	public static DoubleMatrix getGaussianMatrix(int width, int height, double sigma) {
+		int halfWidth = width/2;
+		int halfHeight = height/2;
+		double twoSigmaSq = 2.0*sigma*sigma;
+		double denom = Math.PI*twoSigmaSq;
+		DoubleMatrix gaussian = new DoubleMatrix(width, height);
+		for(int y=0; y < height; y++) {
+			for(int x=0; x < width; x++) {
+				double dx = x-halfWidth;
+				double dy = y-halfHeight;
+				double g = Math.exp(-(dx*dx + dy*dy)/twoSigmaSq)/denom;
+				gaussian.put(y, x, g);
+			}
+		}
+		return gaussian;
+	}
 
-		// Calculate the gradient products.
-		DoubleMatrix xResponse = dx.mul(dx);
-		DoubleMatrix yResponse = dy.mul(dy);
-		//DoubleMatrix xyResponse = dx.mul(dy);
+	public static DoubleMatrix convolve2D(DoubleMatrix matrix, DoubleMatrix kernel) {
+		DoubleMatrix result = new DoubleMatrix(matrix.getRows(), matrix.getColumns());
+		int halfWidth = kernel.getColumns()/2;
+		int halfHeight = kernel.getRows()/2;
+		for(int r=halfHeight; r < matrix.getRows()-halfHeight; r++) {
+			for(int c=halfWidth; c < matrix.getColumns()-halfWidth; c++) {
+				double accumulator = 0.0;
+				for(int y=0; y < kernel.getRows(); y++) {
+					for(int x=0; x < kernel.getColumns(); x++) {
+						double m = matrix.get(r-halfHeight+y, c-halfWidth+x);
+						double k = kernel.get(y, x);
+						accumulator += m*k;
+					}
+				}
+				result.put(r, c, accumulator);
+			}
+		}
+		return result;
+	}
 
-		//DoubleMatrix det = xResponse.mul(yResponse).sub(xyResponse.mul(xyResponse)); // subi?
-		//DoubleMatrix trace = xResponse.add(yResponse);
+	public static DoubleMatrix getHarrisResponse(DoubleMatrix image, int windowSize) {
+		final double sigma1 = 0.2;
+		final double sigma2 = 0.01;
+		final double epsilon = 0.1; // To prevent divide by zero.
 
-		return xResponse.addi(yResponse); //det.div(trace);
+		final DoubleMatrix gaussian1 = getGaussianMatrix(windowSize, windowSize, sigma1);
+		final DoubleMatrix gaussian2 = getGaussianMatrix(windowSize, windowSize, sigma2);
+		final DoubleMatrix horizontalEdge = new DoubleMatrix(new double[][] {
+			{-1, 0, 1},
+			{-1, 0, 1},
+			{-1, 0, 1}
+		});
+		final DoubleMatrix verticalEdge = horizontalEdge.transpose();
+
+		final DoubleMatrix img = convolve2D(image, gaussian1);
+
+		final DoubleMatrix Ix = convolve2D(img, horizontalEdge);
+		final DoubleMatrix Iy = convolve2D(img, verticalEdge);
+
+		final DoubleMatrix Ix2 = Ix.mul(Ix);
+		final DoubleMatrix Iy2 = Iy.mul(Iy);
+		final DoubleMatrix Ixy = Ix.mul(Iy);
+
+		// You have to do gaussian filtering BEFORE GRADIENT CALCULATION OR YOU GET ZERO.
+		final double gaussianSum = gaussian2.sum();
+		final DoubleMatrix gIx2 = convolve2D(Ix2, gaussian2).divi(gaussianSum);
+		final DoubleMatrix gIy2 = convolve2D(Iy2, gaussian2).divi(gaussianSum);
+		final DoubleMatrix gIxy = convolve2D(Ixy, gaussian2).divi(gaussianSum);
+
+		// (ix2*iy2 - ixy*ixy) / (ix2+iy2)
+		return gIx2.mul(gIy2).sub(gIxy.mul(gIxy)).div(gIx2.add(gIy2).add(epsilon));
 	}
 
 	/*** Given an image matrix, and a feature size, calculate feature points.
@@ -176,39 +245,22 @@ public class ImageTools {
 	 * @param image A single-channel greyscale image.
 	 * @return
 	 */
-	public static DoubleMatrix findFeaturePoints(DoubleMatrix image, int windowSize, int minFeatures, int maxFeatures) {
-		final double FAILURE_THRESHOLD = 0.01;
-		final double THRESHOLD_STEP = 0.1;
-		double threshold = 1.0;
+	public static DoubleMatrix findFeaturePoints(DoubleMatrix image, int windowSize) {
+		// First, find the corners.
+		DoubleMatrix harrisResponse = getHarrisResponse(image, windowSize);
+		double meanResponse = harrisResponse.mean();
+		double maxResponse = harrisResponse.max();
+		double threshold = (5*meanResponse+maxResponse)/6.0; // Somewhere above average and max, slightly favoring mean.
 
-		// First, find the edges.
-		DoubleMatrix edges = edgeDetector(image);
-
-		// Adaptive threshold.
-		int featureCount = 0;
-		DoubleMatrix candidates = null;
-		while(featureCount < minFeatures && threshold > FAILURE_THRESHOLD) {
-			threshold -= THRESHOLD_STEP;
-			double min = edges.min();
-			double max = edges.max()+0.000001;
-			candidates = (edges.sub(min)).divi(max-min);
-			featureCount = (int)candidates.gti(threshold).sum();
-		}
-
-		if(featureCount < minFeatures) {
-			System.err.println("Unable to acquire at least " + minFeatures);
-			System.err.println("Only " + featureCount + " features acquired.");
-			return null;
-		}
+		int featureCount = (int)harrisResponse.gt(meanResponse).sum();
 
 		// We can expect
-		DoubleMatrix results = new DoubleMatrix(maxFeatures, 2+(windowSize*windowSize));
+		DoubleMatrix results = new DoubleMatrix(featureCount, 2+(windowSize*windowSize));
 		int currentPoint = 0;
-
 		for(int y=windowSize; y < image.getRows()-windowSize && currentPoint < results.getRows(); y++) {
 			for(int x=windowSize; x < image.getColumns()-windowSize && currentPoint < results.getRows(); x++) {
 				// Is the point at y x a candidate?
-				if(candidates.get(y, x) > 0) {
+				if(harrisResponse.get(y, x) > threshold) {
 					// Yes?  So fill in the first two columns with the x and y coordinates.
 					results.put(currentPoint, 0, x);
 					results.put(currentPoint, 1, y);
@@ -230,5 +282,74 @@ public class ImageTools {
 
 		// Cut out the empty pieces.
 		return results.getRows(new IntervalRange(0, currentPoint));
+	}
+
+	/***
+	 * Given two matrices of examples (where each row is one example), computes the normalized-cross-correlation value.
+	 * Returns a matrix of distances size |A| * |B|.
+	 * @param candidateSetA
+	 * @param candidateSetB
+	 * @return
+	 */
+	public static DoubleMatrix buildDistanceMatrix(DoubleMatrix candidateSetA, DoubleMatrix candidateSetB) {
+		DoubleMatrix result = DoubleMatrix.zeros(candidateSetA.getRows(), candidateSetB.getRows());
+
+		for(int a=0; a < candidateSetA.getRows(); a++) {
+			DoubleMatrix exampleA = candidateSetA.getRow(a);
+			for(int b=0; b < candidateSetB.getRows(); b++) {
+				DoubleMatrix exampleB = candidateSetB.getRow(b);
+				result.put(a, b, exampleA.squaredDistance(exampleB));
+			}
+		}
+
+		return result;
+	}
+
+	public static int[] getBestPairs(DoubleMatrix distanceMatrix) {
+		int[] pairs = new int[distanceMatrix.getRows()];
+		for(int a=0; a < distanceMatrix.getRows(); a++) {
+			double bestValue = Double.MAX_VALUE;
+			int bestIndex = -1;
+			for(int b=0; b < distanceMatrix.getColumns(); b++) {
+				// Is this our best match?
+				double matchCoefficient = distanceMatrix.get(a,b);
+				if(matchCoefficient < bestValue) {
+					bestValue = matchCoefficient;
+					bestIndex = b;
+				}
+			}
+			pairs[a] = bestIndex;
+		}
+		return pairs;
+	}
+
+	public static DoubleMatrix getCorrespondences(DoubleMatrix mat1, DoubleMatrix mat2) {
+		int WINDOW_SIZE = 10;
+		// Find features.
+		DoubleMatrix features1 = ImageTools.findFeaturePoints(mat1, WINDOW_SIZE);
+		DoubleMatrix features2 = ImageTools.findFeaturePoints(mat2, WINDOW_SIZE);
+
+		// Decompose into windows and point values.
+		DoubleMatrix points1 = features1.getColumns(new IntervalRange(0, 2));
+		DoubleMatrix points2 = features2.getColumns(new IntervalRange(0, 2));
+		DoubleMatrix windows1 = features1.getColumns(new IntervalRange(2, features1.getColumns()));
+		DoubleMatrix windows2 = features2.getColumns(new IntervalRange(2, features2.getColumns()));
+
+		// Use the windows (basically feature descriptors) to find matches.
+		// Then convert the match indices into a matrix with four columns (two xy pairs for each match).
+		DoubleMatrix dismat = ImageTools.buildDistanceMatrix(windows1, windows2);
+		int[] matches = ImageTools.getBestPairs(dismat);
+		DoubleMatrix correspondences = new DoubleMatrix(points1.getRows(), 4);
+
+		for(int a = 0; a < matches.length; a++) {
+			int b = matches[a];
+			if(b == -1) { continue; }
+			correspondences.put(a, 0, points1.get(a, 0));
+			correspondences.put(a, 1, points1.get(a, 1));
+			correspondences.put(a, 2, points2.get(b, 0));
+			correspondences.put(a, 3, points2.get(b, 1));
+		}
+
+		return correspondences;
 	}
 }
