@@ -1,34 +1,12 @@
 package com.josephcatrambone.sharpcloud;
 
-import javafx.animation.KeyFrame;
-import javafx.animation.Timeline;
 import javafx.application.Application;
-import javafx.event.ActionEvent;
-import javafx.event.Event;
-import javafx.event.EventHandler;
-import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.canvas.Canvas;
-import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.control.Button;
-import javafx.scene.control.CheckBox;
-import javafx.scene.control.TextField;
-import javafx.scene.image.*;
-import javafx.scene.image.Image;
-import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
+import javafx.scene.layout.Pane;
 import javafx.stage.Stage;
-import javafx.stage.WindowEvent;
-import javafx.util.Duration;
 
-import java.io.*;
 import java.util.Random;
-import java.util.Scanner;
-import java.util.function.Consumer;
-import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import org.jblas.DoubleMatrix;
 
 public class MainWindow extends Application {
 	private static final Logger LOGGER = Logger.getLogger(MainWindow.class.getName());
